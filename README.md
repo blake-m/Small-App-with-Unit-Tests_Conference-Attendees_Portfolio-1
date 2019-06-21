@@ -1,0 +1,1 @@
+# Initializing Conference Attendees repository
