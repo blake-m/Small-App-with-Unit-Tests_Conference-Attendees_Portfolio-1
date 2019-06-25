@@ -9,6 +9,7 @@
 
 import psycopg2 as pg2
 import sys
+import re
 import datetime
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QGridLayout, QPushButton, QLabel, QComboBox, QToolTip, \
@@ -23,6 +24,7 @@ def base_query(func, *args):
     """
 
     conn = None
+    result = None
     try:
         params = config(filename='conference_attendees.ini')
         conn = pg2.connect(**params)
@@ -36,6 +38,7 @@ def base_query(func, *args):
     finally:
         if conn is not None:
             conn.close()
+            return result
 
 
 class Attendee:
@@ -58,9 +61,9 @@ class GUIMenu(QWidget):
     def init_ui(self):
         grid = QGridLayout()
         positions = [(i, j) for i in range(1, 3) for j in range(1, 3)]
-        names = ['Add an attendee', 'Delete and attendee',
+        names = ['Add an attendee', 'Delete an attendee',
                  'Get info on an attendee', 'Get full list']
-        functions = [self.add_attendee_dialog, self.cancel,
+        functions = [self.add_attendee_dialog, self.remove_attendee_dialog,
                      self.cancel, self.cancel]
 
         for position, name, function in zip(positions, names, functions):
@@ -73,6 +76,9 @@ class GUIMenu(QWidget):
         self.setGeometry(200, 200, 200, 200)
         self.setWindowTitle('CA System')
         self.show()
+
+    def cancel(self):
+        return self.close()
 
     def get_info(self):
         return 'lol'
@@ -135,8 +141,32 @@ class GUIMenu(QWidget):
         cur.execute(sql, (first, last, city, company, email, phone, date))
         return cur, None
 
-    def cancel(self):
-        return self.close()
+    def remove_attendee_dialog(self):
+        items = base_query(self.remove_attendee_get_list)
+        counter = 0
+        for item in items:
+            items[counter] = f'{item[1]} {item[2]} from {item[3]} working at {item[4]}, id {item[0]} '
+            counter += 1
+        item, ok_pressed = QInputDialog.getItem(self, "Delete attendee",
+                                                "Which attendee do you want"
+                                                "\nto remove from the list?",
+                                                items, 0, False)
+        if ok_pressed and item:
+            print(type(re.search('\d+', item).group())) # TO REMOVE
+            base_query(self.remove_attendee_query, re.search('\d+', item).group(), item)
+
+    def remove_attendee_get_list(self, cur):
+        sql = '''SELECT * FROM guestlist;'''
+        cur.execute(sql)
+        items = cur.fetchall()
+        return cur, items
+
+    def remove_attendee_query(self, cur, guest_id, who_deleted):
+        sql = '''DELETE FROM guestlist
+                 WHERE guest_id = %s;'''
+        cur.execute(sql, (guest_id,))
+        QMessageBox.information(self, "Continue", f"Attendee:\n{who_deleted}\nis now deleted", QMessageBox.Ok)
+        return cur, None
 
 
 def main():
