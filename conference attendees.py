@@ -1,3 +1,12 @@
+# This program helps you to keep track of conference attendees
+#
+# Features:
+# - keeps track of: name, company, city, email, phone, last update
+# - add a new attendee
+# - remove an existing attendee (based on a database)
+# - display information on an attendee
+# - list all of the attendees -> output it to a docx file
+
 import psycopg2 as pg2
 import sys
 import datetime
@@ -5,17 +14,6 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QGridLayout, QPushButton, QLabel, QComboBox, QToolTip, \
     QInputDialog, QMessageBox
 from config import config
-
-
-# This program helps you to keep track of conference attendees
-#
-# Features:
-# - keeps track of: name, company, city, email, phone, last update
-# - add a new attendee
-# - remove an existing attendee
-# - display information on an attendee
-# - list all of the attendees -> output it to a docx file
-
 
 def base_query(func, *args):
     """
@@ -39,6 +37,7 @@ def base_query(func, *args):
         if conn is not None:
             conn.close()
 
+
 class Attendee:
 
     def __init__(self):
@@ -49,19 +48,6 @@ class Attendee:
         self.email = None
         self.phone = None
         self.last_update = None
-
-class GUIWXXXXXXXXXXXXXXXXXXXXX(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.init_ui()
-
-    def init_ui(self):
-
-        self.setLayout(grid)
-        self.setGeometry(200, 200, 200, 200)
-        self.setWindowTitle('Which Attendee')
-        self.show()
-
 
 
 class GUIMenu(QWidget):
@@ -82,7 +68,6 @@ class GUIMenu(QWidget):
             button.setStyleSheet("background-color: gray")
             grid.addWidget(button, *position)
             button.clicked.connect(function)
-            button.clicked.connect(self.cancel)
 
         self.setLayout(grid)
         self.setGeometry(200, 200, 200, 200)
@@ -121,7 +106,7 @@ class GUIMenu(QWidget):
                                                  f'\n\tPhone: {attendee_data[5]}',
                                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if message_reply == QMessageBox.Yes:
-                print('Yes clicked1.')
+                attendee_data.append(datetime.datetime.now())
                 base_query(
                     self.add_attendee_query,
                     attendee_data[0],
@@ -129,37 +114,30 @@ class GUIMenu(QWidget):
                     attendee_data[2],
                     attendee_data[3],
                     attendee_data[4],
-                    attendee_data[5]
+                    attendee_data[5],
+                    attendee_data[6]
                 )
                 QMessageBox.information(self, "Continue", "Attendee created", QMessageBox.Ok)
             else:
-                print('No clicked.')
+                QMessageBox.information(self, "Interrupted", "Operation interrupted!", QMessageBox.Ok)
 
-            attendee_data.append(datetime.datetime.now())
-            print(attendee_data)   # To remove
-
-    def add_attendee_query(self, cur, first, last, city, company, email, phone):
-        print(type(first), type(last), type(city), type(company), type(email), type(phone))
+    def add_attendee_query(self, cur, first, last, city, company, email, phone, date):
         sql = '''INSERT INTO guestlist(
                         first_name,
                         last_name,
                         city,
                         company,
                         email,
-                        phone)
+                        phone,
+                        date_added)
                 VALUES
-                        (%s,%s,%s,%s,%s,%s);'''
-        cur.execute(sql, (first, last, city, company, email, phone))
+                        (%s,%s,%s,%s,%s,%s,%s);'''
+        cur.execute(sql, (first, last, city, company, email, phone, date))
         return cur, None
 
     def cancel(self):
-        pass
-        # return self.close()
+        return self.close()
 
-
-# def main_loop():
-#     menu = GUIMenu()
-#
 
 def main():
     app = QApplication(sys.argv)
