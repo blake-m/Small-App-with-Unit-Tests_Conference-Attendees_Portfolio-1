@@ -6,14 +6,17 @@
 # - remove an existing attendee (based on a database)
 # - display information on an attendee
 # - list all of the attendees -> output it to a docx file
+# - buttons have tooltips
 
+import docx
 import psycopg2 as pg2
 import sys
 import re
 import datetime
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QGridLayout, QPushButton, QLabel, QComboBox, QToolTip, \
-    QInputDialog, QMessageBox
+
+import xlsxwriter as xlsxwriter
+from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QToolTip, \
+    QInputDialog, QMessageBox, QFileDialog, QLineEdit
 from config import config
 
 def base_query(func, *args):
@@ -40,19 +43,6 @@ def base_query(func, *args):
             conn.close()
             return result
 
-
-class Attendee:
-
-    def __init__(self):
-        self.id = None
-        self.name = None
-        self.company = None
-        self.city = None
-        self.email = None
-        self.phone = None
-        self.last_update = None
-
-
 class GUIMenu(QWidget):
     def __init__(self):
         super().__init__()
@@ -64,11 +54,17 @@ class GUIMenu(QWidget):
         names = ['Add an attendee', 'Delete an attendee',
                  'Get info on an attendee', 'Get full list']
         functions = [self.add_attendee_dialog, self.remove_attendee_dialog,
-                     self.cancel, self.cancel]
+                     self.get_info_dialog, self.get_list_dialog]
+        tooltips = ['Adds an attendee based on your input',
+                    'Deletes an attendee chosen from the list',
+                    'Provides more information about an attendee based on your input',
+                    'Exports a list of attendees in xlsx or docx format'
+                   ]
 
-        for position, name, function in zip(positions, names, functions):
+        for position, name, function, tooltip in zip(positions, names, functions, tooltips):
             button = QPushButton(name)
-            button.setStyleSheet("background-color: gray")
+            # button.setStyleSheet("background-color: gray")
+            button.setToolTip(tooltip)
             grid.addWidget(button, *position)
             button.clicked.connect(function)
 
@@ -142,20 +138,19 @@ class GUIMenu(QWidget):
         return cur, None
 
     def remove_attendee_dialog(self):
-        items = base_query(self.remove_attendee_get_list)
+        items = base_query(self.get_all_attendees_query)
         counter = 0
         for item in items:
-            items[counter] = f'{item[1]} {item[2]} from {item[3]} working at {item[4]}, id {item[0]} '
+            items[counter] = f'{item[1]} {item[2]} from {item[3]} working at {item[4]}, id {item[0]}'
             counter += 1
         item, ok_pressed = QInputDialog.getItem(self, "Delete attendee",
                                                 "Which attendee do you want"
                                                 "\nto remove from the list?",
                                                 items, 0, False)
         if ok_pressed and item:
-            print(type(re.search('\d+', item).group())) # TO REMOVE
             base_query(self.remove_attendee_query, re.search('\d+', item).group(), item)
 
-    def remove_attendee_get_list(self, cur):
+    def get_all_attendees_query(self, cur):
         sql = '''SELECT * FROM guestlist;'''
         cur.execute(sql)
         items = cur.fetchall()
@@ -168,6 +163,127 @@ class GUIMenu(QWidget):
         QMessageBox.information(self, "Continue", f"Attendee:\n{who_deleted}\nis now deleted", QMessageBox.Ok)
         return cur, None
 
+    def get_list_dialog(self):
+        items = ("Word Document", "Excel Document")
+        item, okPressed = QInputDialog.getItem(self, "File Format", "Format:", items, 0, False)
+        if okPressed and item:
+            if item == "Word Document":
+                self.get_list_docx(self.get_list_save_file())
+            elif item == "Excel Document":
+                self.get_list_xlsx(self.get_list_save_file('.xlsx'))
+
+
+    def get_list_save_file(self, format='.docx'):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_name, _ = QFileDialog.getSaveFileName(self, "Where do you want to save your file?", "",
+                                                  f"Microsoft Office {format} Files (*{format});;All Files (*)",
+                                                   options=options)
+        if file_name:
+            if file_name.endswith(format):
+                return file_name
+            elif re.findall('\.+', file_name):
+                self.get_list_dialog_error()
+                self.get_list_dialog()
+            else:
+                file_name += format
+                return file_name
+
+    def get_list_dialog_error(self):
+        QMessageBox.information(self,
+                                "Try again", "Incorrect File Name - try again!", QMessageBox.Ok)
+
+    def get_list_docx(self, directory):
+        doc = docx.Document()
+        list = base_query(self.get_all_attendees_query)
+        counter = 0
+        for item in list:
+            list[counter] = f'[ ] id {item[0]}:' \
+                            f'\n\t{item[1]} {item[2]} from {item[3]}' \
+                            f'\n\tWorking at {item[4]},' \
+                            f'\n\temail: {item[5]},' \
+                            f'\n\tnumber: {item[6]}'
+            doc.add_paragraph(list[counter])
+            counter += 1
+        doc.save(f'{directory}')
+        self.get_list_success(directory)
+
+
+
+    def get_list_xlsx(self, directory):
+        xlsx = xlsxwriter.Workbook(directory)
+        worksheet = xlsx.add_worksheet()
+        list = base_query(self.get_all_attendees_query)
+
+        # Create 1st row
+        column_titles = ['id', 'first name', 'last_name', 'city',
+                         'company', 'email', 'phone number', 'date added'
+                        ]
+        row, column = 0,0
+        for title in column_titles:
+            worksheet.write(row, column, title)
+            column += 1
+
+        # Add data to the spreadsheet
+        counter = 0
+        row, column = 1,0
+        for position in list:
+            l = list[counter]
+            for item in l:
+                if column == 7:
+                    item = item.strftime("%Y-%m-%d %H:%M:%S")
+                worksheet.write(row, column, item)
+                column +=1
+            column = 0
+            row += 1
+            counter += 1
+
+        xlsx.close()
+        self.get_list_success(directory)
+
+
+    def get_list_success(self, directory):
+        QMessageBox.information(self,
+                                "List ready", f"List successfully exported to:"
+                                f"\n{directory}", QMessageBox.Ok)
+
+    def get_info_dialog(self):
+        text, ok_pressed = QInputDialog.getText(self,
+                                               "Attendee info",
+                                               "Provide attendee's name (or its part)",
+                                               QLineEdit.Normal, "")
+        text = '%' + text + '%'
+        if ok_pressed and text != '':
+            list = base_query(self.get_info_query, text)
+            if len(list) >= 8:
+                QMessageBox.information(self,
+                                        "Try again",
+                                        "There are too many matching results!\n\nTry more specified search :)"*500,
+                                        QMessageBox.Ok)
+                self.get_info_dialog()
+            else:
+                self.get_info_present(list)
+
+    def get_info_query(self, cur, name):
+        sql = '''SELECT * FROM guestlist
+                 WHERE first_name || ' ' || last_name
+                 ILIKE %s'''
+        cur.execute(sql, (name,))
+        list = cur.fetchall()
+        return cur, list
+
+    def get_info_present(self, list):
+        text = ''
+        for item in list:
+            text += f'id {item[0]}:' \
+                    f'\n\t{item[1]} {item[2]} from {item[3]}' \
+                    f'\n\tWorking at {item[4]},' \
+                    f'\n\temail: {item[5]},' \
+                    f'\n\tnumber: {item[6]}\n\n'
+        QMessageBox.information(self,
+                                "Try again",
+                                f"{text}",
+                                QMessageBox.Ok)
 
 def main():
     app = QApplication(sys.argv)
