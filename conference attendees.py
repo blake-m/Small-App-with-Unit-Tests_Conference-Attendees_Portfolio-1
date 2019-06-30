@@ -1,4 +1,4 @@
-# This program helps you to keep track of conference attendees
+# This program helps you keep track of conference attendees
 #
 # Features:
 # - keeps track of: name, company, city, email, phone, last update
@@ -15,7 +15,7 @@ import re
 import datetime
 
 import xlsxwriter as xlsxwriter
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QToolTip, \
+from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, \
     QInputDialog, QMessageBox, QFileDialog, QLineEdit
 from config import config
 
