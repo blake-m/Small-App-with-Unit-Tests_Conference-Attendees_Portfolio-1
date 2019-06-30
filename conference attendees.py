@@ -13,8 +13,7 @@ import psycopg2 as pg2
 import sys
 import re
 import datetime
-
-import xlsxwriter as xlsxwriter
+import xlsxwriter
 from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
