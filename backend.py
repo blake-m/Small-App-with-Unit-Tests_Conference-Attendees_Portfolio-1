@@ -18,7 +18,7 @@ def base_query(func, *args):
     conn = None
     result = None
     try:
-        parameters = get_database_configuration(filename="../conference_attendees.ini")
+        parameters = get_database_configuration(filename="conference_attendees.ini")
         conn = pg2.connect(**parameters)
         cur = conn.cursor()
         # Here goes the query
@@ -94,7 +94,6 @@ def remove_attendee_query(cur, guest_id):
 
 
 def get_matching_attendees(user_input):
-    # TO DO - cos tu nie tak :P Ta funkcja jest zbedna
     """
     Works with base_query() function (needs cursor as an argument and returns cursor).
     Returns a list of tuples with attendees data
@@ -128,7 +127,8 @@ def create_text_version_list_of_all_attendees(list_from_query):
     text_version_list_of_all_attendees = []
     for attendee in list_from_query:
         text_version_list_of_all_attendees.append(
-            f"{attendee[1]} {attendee[2]} from {attendee[3]} working at {attendee[4]}, id {attendee[0]}"
+            f"{attendee[1]} {attendee[2]} from {attendee[3]}"
+            f" working at {attendee[4]}, id {attendee[0]}"
         )
         counter += 1
     return text_version_list_of_all_attendees
@@ -157,7 +157,7 @@ def get_attendees_list_format_docx(directory):
     return directory
 
 
-def get_attendees_list_format_xlsx(directory):
+def get_attendees_list_format_xlsx(directory=None):
     """
     Takes in a directory with the 'to-be-created' filename.
     Creates an excel document (*.xlsx) with a list of attendees.

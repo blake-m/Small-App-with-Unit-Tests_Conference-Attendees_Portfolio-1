@@ -1,6 +1,3 @@
-# TO DO: dorób wszystkie To Do, usun pliki, które są niepotrzebne... posprzątaj  - wsadz na git
-# potem zrob testy i znow refactor i znow na git!
-
 import re
 from PyQt5.QtWidgets import (
     QWidget,
@@ -22,6 +19,7 @@ from backend import (
     remove_attendee_query,
     store_attendee_data_in_postgresql
 )
+
 
 class GUIMenu(QWidget):
     """
@@ -74,9 +72,6 @@ class GUIMenu(QWidget):
         self.setWindowTitle("CA System")
         self.show()
 
-    def cancel(self):
-        return self.close()
-
     def get_attendee_data_dialog(self, query_list):
         """
         Gets input from the user by showing him a small dialog window for every
@@ -111,7 +106,6 @@ class GUIMenu(QWidget):
                 QMessageBox.No,
                 )
             return message_reply
-
 
     def add_attendee_dialog(self):
         """
@@ -171,7 +165,10 @@ class GUIMenu(QWidget):
         )
 
     def remove_attendee_dialog(self):
-        # TO DO: DOCSTRING
+        """
+        Presents a dialog to the user. The user can choose which user
+        should be deleted.
+        """
         list_of_all_attendees = base_query(
             get_list_all_attendees_query
         )
@@ -183,7 +180,7 @@ class GUIMenu(QWidget):
 
         if ok_pressed and attendee_to_delete:
             base_query(
-                remove_attendee_query, re.search("\d+", attendee_to_delete).group()
+                remove_attendee_query, re.search(r"\d+", attendee_to_delete).group()
             )
             self.deletion_successful_show_information(attendee_to_delete)
 
@@ -209,15 +206,15 @@ class GUIMenu(QWidget):
             if chosen_format == "Word Document":
                 directory = get_attendees_list_format_docx(
                         self.get_attendees_list_save_file())
-                if directory: self.get_attendees_list_show_success(directory)
+                if directory:
+                    self.get_attendees_list_show_success(directory)
             elif chosen_format == "Excel Document":
                 directory = get_attendees_list_format_xlsx(
                         self.get_attendees_list_save_file(".xlsx"))
-                if directory: self.get_attendees_list_show_success(directory)
+                if directory:
+                    self.get_attendees_list_show_success(directory)
 
-
-
-    def get_attendees_list_save_file(self, format=".docx"):
+    def get_attendees_list_save_file(self, format_=".docx"):
         """
         Asks the user to specify where to save and how to name the file with the guest list.
         """
@@ -227,18 +224,19 @@ class GUIMenu(QWidget):
             self,
             "Where do you want to save your file?",
             "",
-            f"Microsoft Office {format} Files (*{format});;All Files (*)",
+            f"Microsoft Office {format_} Files (*{format_});;All Files (*)",
             options=options,
         )
-        # Check if correct file format is about to be created, ask for input one more time if not.'
+        # Check if correct file format_ is about to be created,
+        # ask for input one more time if not.'
         if file_name:
-            if file_name.endswith(format):
+            if file_name.endswith(format_):
                 return file_name
             elif re.findall("\.+", file_name):
                 self.get_attendees_list_show_error()
                 self.get_attendees_list_save_file()
             else:
-                file_name += format
+                file_name += format_
                 return file_name
 
     def get_attendees_list_show_error(self):
@@ -270,20 +268,19 @@ class GUIMenu(QWidget):
         )
         return user_input
 
-    # TO DO: refactor from here
     def get_attendee_info_dialog(self):
         """
         Based on user's input (name and/or last name required)
         returns complete information about an attendee.
         """
         user_input = self.user_input_attendees_name()
-        user_input = "%".join(user_input.join("%"))
+        user_input = "%" + user_input + "%"
 
         if user_input != "%%":
             matching_attendees_list = get_matching_attendees(user_input)
             if len(matching_attendees_list) >= 7:
                 self.too_many_matching_results_show_info()
-                self.get_info_dialog()
+                self.get_attendee_info_dialog()
             else:
                 self.get_attendee_info_present(matching_attendees_list)
 
@@ -301,14 +298,23 @@ class GUIMenu(QWidget):
         )
 
     def get_attendee_info_present(self, matching_attendees_list):
-        # TO DO: DOCSTRING
-        text = ""
-        for item in matching_attendees_list:
-            text += (
-                f"id {item[0]}:"
-                f"\n\t{item[1]} {item[2]} from {item[3]}"
-                f"\n\tWorking at {item[4]},"
-                f"\n\temail: {item[5]},"
-                f"\n\tnumber: {item[6]}\n\n"
-            )
-        QMessageBox.information(self, "Try again", f"{text}", QMessageBox.Ok)
+        """
+        Takes in a list of matching attendees, converts it to a string
+        format, presents it in an information window.
+        """
+        text = []
+        for attribute in matching_attendees_list:
+            text += [
+                f"id {attribute[0]}:"
+                f"\n\t{attribute[1]} {attribute[2]} from {attribute[3]}"
+                f"\n\tWorking at {attribute[4]},"
+                f"\n\temail: {attribute[5]},"
+                f"\n\tnumber: {attribute[6]}\n\n"
+            ]
+        if not text:
+            text_ready = "No matching results found. Try again!"
+        else:
+            text_ready = ''.join(text)
+        QMessageBox.information(self,
+                                "Matching attendees",
+                                f"{text_ready}", QMessageBox.Ok)

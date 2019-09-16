@@ -1,5 +1,8 @@
+import docx
 import os
+import pandas as pd
 import unittest
+import xlsxwriter
 
 from datetime import datetime
 
@@ -12,6 +15,8 @@ from backend import (
     store_attendee_data_in_postgresql,
     create_text_version_list_of_all_attendees,
     get_attendees_list_format_docx,
+    get_attendees_list_format_xlsx,
+    xlsx_file_add_column_titles,
     xlsx_file_add_data
 )
 from config import get_database_configuration
@@ -31,8 +36,8 @@ def remove_test_attendee(cur):
     cur.execute(sql, )
     return cur, None
 
-test_attendee_data = ('Hermenegildo', 'Verycomplicatedname', 'New York', 'Testers',
-                      'jd@testers.com', '111222333',
+test_attendee_data = ('Hermenegildo', 'Verycomplicatedname', 'New York',
+                      'Testers', 'jd@testers.com', '111222333',
                       datetime(2010, 10, 10, 10, 10, 10, 10))
 
 # Tests
@@ -41,7 +46,7 @@ class BackendTests(unittest.TestCase):
         """Checks if the data read from the configuration file is correct."""
 
         test_database_config_data = get_database_configuration(
-            filename="../conference_attendees.ini")
+            filename="conference_attendees.ini")
         self.assertEqual(test_database_config_data['host'],
                          os.environ['DB_HOST_CA'])
         self.assertEqual(test_database_config_data['database'],
@@ -113,19 +118,100 @@ class BackendTests(unittest.TestCase):
         self.assertFalse(base_query(get_attendee_info_query, 'Hermenegildo Verycomplicatedname'))
 
     def test_store_attendee_data_in_postgresql(self):
-        store_attendee_data_in_postgresql()
+        """Checks if the chosen attendee is added to the database."""
+        store_attendee_data_in_postgresql(list(test_attendee_data[:6]))
+        attendee = base_query(get_attendee_info_query, 'Hermenegildo Verycomplicatedname')
+        for attribute in test_attendee_data[:6]:
+            self.assertIn(attribute, attendee[0])
+        base_query(remove_test_attendee)
 
     def test_create_text_version_list_of_all_attendees(self):
-        create_text_version_list_of_all_attendees()
+        """
+        Checks if the text info about the attendees is returned
+        as a properly structured string.
+        """
+        store_attendee_data_in_postgresql(list(test_attendee_data[:6]))
+        list_all_attendees = base_query(get_list_all_attendees_query)
+        attendees_list_text = create_text_version_list_of_all_attendees(
+                                                        list_all_attendees)
+        for attendee in attendees_list_text:
+            self.assertEqual(type(attendee), str)
+        self.assertEqual(attendees_list_text[0][:65],
+                         'Hermenegildo Verycomplicatedname from New York'
+                         ' working at Testers')
+        base_query(remove_test_attendee)
 
     def test_get_attendees_list_format_docx(self):
-        get_attendees_list_format_docx()
+        """
+        Checks if a docx file is created and contains a specified
+        form of text with attendees.
+        """
+        directory = get_attendees_list_format_docx('test.docx')
+        doc = docx.Document(directory)
+        full_text = []
+        for paragraph in doc.paragraphs:
+            full_text.append(paragraph.text)
 
-    def test_get_attendees_list_format_xlsx(self):
-        get_attendees_list_format_xlsx()
+        attendees_list = base_query(get_list_all_attendees_query)
+        for attendee, paragraph in zip(attendees_list, full_text):
+            self.assertIn(
+                    f"[ ] id {attendee[0]}:"
+                    f"\n\t{attendee[1]} {attendee[2]} from {attendee[3]}"
+                    f"\n\tWorking at {attendee[4]},"
+                    f"\n\temail: {attendee[5]},"
+                    f"\n\tnumber: {attendee[6]}",
+                    paragraph)
+        os.unlink('test.docx')  # cleanup
+
+    def test_get_attendees_list_format_xlsx_returns_none(self):
+        """Checks if the function without any arguments returns None."""
+        self.assertEqual(get_attendees_list_format_xlsx(), None)
+
+    def test_get_attendees_list_format_xlsx_returns_directory(self):
+        """Checks if the function without any arguments returns the directory."""
+        self.assertEqual(get_attendees_list_format_xlsx('test.xlsx'), 'test.xlsx')
+        os.unlink('test.xlsx')
 
     def test_xlsx_file_add_column_titles(self):
-        xlsx_file_add_column_titles()
+        """
+        Checks if the columns added to a newly created xlsx file
+        is the same as intended.
+        """
+        column_titles = [
+            "test1",
+            "test2",
+            "test3"
+        ]
+
+        xlsx_file = xlsxwriter.Workbook('test.xlsx')
+        worksheet = xlsx_file.add_worksheet()
+        xlsx_file_add_column_titles(column_titles, worksheet)
+        xlsx_file.close()
+
+        xlsx_file_check = pd.read_excel('test.xlsx')
+        self.assertEqual(list(xlsx_file_check.columns), ['test1', 'test2', 'test3'])
+
+        os.unlink('test.xlsx')
 
     def test_xlsx_file_add_data(self):
-        xlsx_file_add_data()
+        """
+        Checks if the data added to a newly created xlsx file
+        is the same as intended.
+        """
+        row_data = (
+            "test1",
+            "test2",
+            "test3"
+        )
+        multiple_rows = [row_data for _ in range(10)]
+
+        xlsx_file = xlsxwriter.Workbook('test.xlsx')
+        worksheet = xlsx_file.add_worksheet()
+        xlsx_file_add_data(multiple_rows, worksheet)
+        xlsx_file.close()
+
+        xlsx_file_check = pd.read_excel('test.xlsx')
+        for row in xlsx_file_check.values:
+            self.assertEqual(tuple(row), row_data)
+
+        os.unlink('test.xlsx')
