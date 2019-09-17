@@ -8,14 +8,13 @@ from datetime import datetime
 
 from backend import (
     base_query,
-    add_attendee_query,
-    get_list_all_attendees_query,
-    get_attendee_info_query,
-    remove_attendee_query,
-    store_attendee_data_in_postgresql,
     create_text_version_list_of_all_attendees,
     get_attendees_list_format_docx,
     get_attendees_list_format_xlsx,
+    get_list_all_attendees,
+    get_matching_attendees,
+    remove_attendee,
+    store_attendee_data_in_postgresql,
     xlsx_file_add_column_titles,
     xlsx_file_add_data
 )
@@ -23,6 +22,7 @@ from config import get_database_configuration
 
 
 # Functions and variables that save code
+@base_query
 def remove_test_attendee(cur):
     sql = """DELETE FROM 
                     guestlist 
@@ -36,9 +36,11 @@ def remove_test_attendee(cur):
     cur.execute(sql, )
     return cur, None
 
+
 test_attendee_data = ('Hermenegildo', 'Verycomplicatedname', 'New York',
                       'Testers', 'jd@testers.com', '111222333',
                       datetime(2010, 10, 10, 10, 10, 10, 10))
+
 
 # Tests
 class BackendTests(unittest.TestCase):
@@ -58,40 +60,25 @@ class BackendTests(unittest.TestCase):
 
     def test_base_query(self):
         """
-        Checks if base_query is able to talk in a specific test_func,
-        execute a very specific query within it and compares its
-        result with the expected result.
+        Checks if base_query is able to take in a specific test_func,
+        execute a very specific query within it. Compares its result
+        with the expected result. Test table is used for this task.
         """
+        @base_query
         def test_func(cur):
             sql = """SELECT * FROM guestlist_test WHERE guest_id = 50"""
             cur.execute(sql, )
             result = cur.fetchone()
             return cur, result
-        test_attendee = base_query(test_func)
+        test_attendee = test_func()
         self.assertEqual(str(test_attendee),
                          "(50, 'Miłosz', 'Wyrzbicki', 'Poznań',"
                          " 'Coders', 'aw@coders.com', '786978432',"
                          " datetime.datetime(2019, 9, 13, 13, 22, 15, 271516))")
 
-    def test_add_attendee_querry_and_test_get_attendee_info_query(self):
-        """
-        Checks if the attendee is added to the database in the
-        following steps:
-        - uses the tested function
-        - queries the database to see if the new record is there
-        - compares it with the expected values
-        - removes the data from the database
-        - resets the PostgreSQL SEQUENCE to the value
-        from the beginning of the transaction
-        """
-        base_query(add_attendee_query, test_attendee_data)
-        test_attendee = base_query(get_attendee_info_query, 'Hermenegildo Verycomplicatedname')
-        self.assertEqual(test_attendee_data, test_attendee[0][1:])
-        base_query(remove_test_attendee)
-
-    def test_get_list_all_attendees_query(self):
+    def test_get_list_all_attendees(self):
         """Checks data types of all attendees attributes."""
-        all_attendees = base_query(get_list_all_attendees_query)
+        all_attendees = get_list_all_attendees()
         for attendee in all_attendees:
             self.assertEqual(type(attendee), tuple)
             for attribute in attendee:
@@ -102,44 +89,43 @@ class BackendTests(unittest.TestCase):
                 else:
                     self.assertEqual(type(attribute), str)
 
-
-    def test_remove_attendee_query(self):
+    def test_remove_attendee(self):
         """
         Checks if the chosen attendee is removed from the database by:
         - adding a test attendee
-        - getting his data
-        - removing the attendee base on this data
+        - retrieving his data
+        - removing the attendee based on this data
         - trying to query the same attendee again and making sure
         no results come back.
         """
-        base_query(add_attendee_query, test_attendee_data)
-        test_attendee = base_query(get_attendee_info_query, 'Hermenegildo Verycomplicatedname')
-        base_query(remove_attendee_query, test_attendee[0][0])
-        self.assertFalse(base_query(get_attendee_info_query, 'Hermenegildo Verycomplicatedname'))
+        store_attendee_data_in_postgresql(test_attendee_data)
+        test_attendee = get_matching_attendees('Hermenegildo Verycomplicatedname')
+        remove_attendee(test_attendee[0][0])   # [0][0] gets the attendee's guest_id
+        self.assertFalse(get_matching_attendees('Hermenegildo Verycomplicatedname'))
 
     def test_store_attendee_data_in_postgresql(self):
         """Checks if the chosen attendee is added to the database."""
-        store_attendee_data_in_postgresql(list(test_attendee_data[:6]))
-        attendee = base_query(get_attendee_info_query, 'Hermenegildo Verycomplicatedname')
+        store_attendee_data_in_postgresql(test_attendee_data)
+        attendee = get_matching_attendees('Hermenegildo Verycomplicatedname')
         for attribute in test_attendee_data[:6]:
             self.assertIn(attribute, attendee[0])
-        base_query(remove_test_attendee)
+        remove_test_attendee()
 
     def test_create_text_version_list_of_all_attendees(self):
         """
         Checks if the text info about the attendees is returned
         as a properly structured string.
         """
-        store_attendee_data_in_postgresql(list(test_attendee_data[:6]))
-        list_all_attendees = base_query(get_list_all_attendees_query)
+        store_attendee_data_in_postgresql(test_attendee_data)
+        list_all_attendees = get_list_all_attendees()
         attendees_list_text = create_text_version_list_of_all_attendees(
                                                         list_all_attendees)
         for attendee in attendees_list_text:
             self.assertEqual(type(attendee), str)
-        self.assertEqual(attendees_list_text[0][:65],
+        self.assertEqual(attendees_list_text[-1][:65],
                          'Hermenegildo Verycomplicatedname from New York'
                          ' working at Testers')
-        base_query(remove_test_attendee)
+        remove_test_attendee()
 
     def test_get_attendees_list_format_docx(self):
         """
@@ -152,7 +138,7 @@ class BackendTests(unittest.TestCase):
         for paragraph in doc.paragraphs:
             full_text.append(paragraph.text)
 
-        attendees_list = base_query(get_list_all_attendees_query)
+        attendees_list = get_list_all_attendees()
         for attendee, paragraph in zip(attendees_list, full_text):
             self.assertIn(
                     f"[ ] id {attendee[0]}:"

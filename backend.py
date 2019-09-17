@@ -2,12 +2,11 @@ import docx
 import psycopg2 as pg2
 import xlsxwriter
 
+from config import get_database_configuration
 from datetime import datetime
 
-from config import get_database_configuration
 
-
-def base_query(func, *args):
+def base_query(func_to_modify):
     """
     Serves as a base for PostgreSQL queries. Use it to avoid Code Bloat.
     Opens and closes the connection each time, commits changes.
@@ -15,29 +14,35 @@ def base_query(func, *args):
     and arguments which are then transferred to the func function as its arguments.
     Returns query's result, if any - otherwise returns None.
     """
-    conn = None
-    result = None
-    try:
-        parameters = get_database_configuration(filename="conference_attendees.ini")
-        conn = pg2.connect(**parameters)
-        cur = conn.cursor()
-        # Here goes the query
-        cur, result = func(cur, *args)
-        conn.commit()
-        cur.close()
-    except (Exception, pg2.DatabaseError) as error:
-        print(error)
-    finally:
-        if conn is not None:
-            conn.close()
-            return result
+    def complete_query(*args):
+        conn = None
+        result = None
+        try:
+            parameters = get_database_configuration(filename="conference_attendees.ini")
+            conn = pg2.connect(**parameters)
+            cur = conn.cursor()
+            # Here goes the query
+            cur, result = func_to_modify(cur, *args)
+            conn.commit()
+            cur.close()
+        except (Exception, pg2.DatabaseError) as error:
+            print(error)
+        finally:
+            if conn is not None:
+                conn.close()
+                return result
+
+    return complete_query
 
 
-def add_attendee_query(cur, attendee_data):
+@base_query
+def store_attendee_data_in_postgresql(cur, attendee_data):
     """
-    Works with base_query() function (needs cursor as an argument and returns cursor).
-    Inserts attendee's data into PostgreSQL database
+    Takes in a list of attendee's data, adds current time to it,
+    saves it in the database.
     """
+    if len(attendee_data) == 6:
+        attendee_data.append(datetime.now())
     first, last, city, company, email, phone, date = attendee_data
 
     sql = """INSERT INTO guestlist(
@@ -54,26 +59,22 @@ def add_attendee_query(cur, attendee_data):
     return cur, None
 
 
-def get_list_all_attendees_query(cur):
+@base_query
+def get_list_all_attendees(cur):
     """
-    Works with base_query() function (needs cursor
-    as an argument and returns cursor). Creates and returns
-    a list of tuples of attendee's data - each item in such
-    a list is one piece of info. For example list[0][0]
-    is first_name of the first attendee.
+    Creates and returns a list of tuples of attendee's data
+    - each item in such a list is one piece of info.
+    For example list[0][0] is first_name of the first attendee.
     """
-    sql = """SELECT * FROM guestlist;"""
+    sql = """SELECT * FROM guestlist ORDER BY guest_id;"""
     cur.execute(sql)
     all_attendees = cur.fetchall()
     return cur, all_attendees
 
 
-def get_attendee_info_query(cur, attendees_name):
-    """
-    Works with base_query() function (needs a cursor as an argument
-    and returns cursor). Searches the database for a name
-    or/and last_name matching 'name' argument.
-    """
+@base_query
+def get_matching_attendees(cur, attendees_name):
+    """Returns a list of tuples with attendees data."""
     sql = """SELECT * FROM guestlist
              WHERE first_name || ' ' || last_name
              ILIKE %s"""
@@ -82,36 +83,16 @@ def get_attendee_info_query(cur, attendees_name):
     return cur, attendees_list
 
 
-def remove_attendee_query(cur, guest_id):
+@base_query
+def remove_attendee(cur, guest_id):
     """
-    Works with base_query() function (needs cursor as an argument and returns cursor).
-    Deletes an attendee from the PostgreSQL database based on their id.
+    Deletes an attendee from the database based on
+    their guest_id.
     """
     sql = """DELETE FROM guestlist
              WHERE guest_id = %s;"""
     cur.execute(sql, (guest_id,))
     return cur, None
-
-
-def get_matching_attendees(user_input):
-    """
-    Works with base_query() function (needs cursor as an argument and returns cursor).
-    Returns a list of tuples with attendees data
-    """
-    matching_attendees_list = base_query(get_attendee_info_query, user_input)
-    return matching_attendees_list
-
-
-def store_attendee_data_in_postgresql(attendee_data):
-    """
-    Takes in a list of attendee's data, adds current time to it,
-    saves it in the database.
-    """
-    attendee_data.append(datetime.now())
-    base_query(
-        add_attendee_query,
-        attendee_data
-    )
 
 
 def create_text_version_list_of_all_attendees(list_from_query):
@@ -141,7 +122,7 @@ def get_attendees_list_format_docx(directory):
     Returns the directory with the created file.
     """
     doc = docx.Document()
-    attendees_list = base_query(get_list_all_attendees_query)
+    attendees_list = get_list_all_attendees()
     counter = 0
     for attendee in attendees_list:
         attendees_list[counter] = (
@@ -169,10 +150,8 @@ def get_attendees_list_format_xlsx(directory=None):
     xlsx_file = xlsxwriter.Workbook(directory)
     worksheet = xlsx_file.add_worksheet()
 
-    # Get the data from the PostgreSQL database
-    attendees_list = base_query(get_list_all_attendees_query)
+    attendees_list = get_list_all_attendees()
 
-    # Create the 1st row
     column_titles = [
         "id",
         "first name",

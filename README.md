@@ -1,5 +1,5 @@
 # Conference Attendees
-###Features:
+### Features:
  - keep track of: name, company, city, email, phone, last update
  - add a new attendee
  - remove an existing attendee (based on a database)
@@ -13,3 +13,6 @@
  ### How
  - Divided into frontend and backend
  - All the backend functions have their unit tests in backend_tests.py
+ 
+ ### Version 1.1
+ - Refactored the code so that the "base_query" function is now a decorator. Thanks to that the code is now more readable, maintainable and also many lines shorter.

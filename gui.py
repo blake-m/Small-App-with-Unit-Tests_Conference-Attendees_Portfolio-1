@@ -10,13 +10,12 @@ from PyQt5.QtWidgets import (
 )
 
 from backend import (
-    base_query,
     create_text_version_list_of_all_attendees,
     get_attendees_list_format_docx,
     get_attendees_list_format_xlsx,
-    get_list_all_attendees_query,
+    get_list_all_attendees,
     get_matching_attendees,
-    remove_attendee_query,
+    remove_attendee,
     store_attendee_data_in_postgresql
 )
 
@@ -109,8 +108,9 @@ class GUIMenu(QWidget):
 
     def add_attendee_dialog(self):
         """
-        Based on the specified query_list gets attendee data from the user and saves it
-        to the database if the user confirms the data is correct.
+        Based on the specified query_list gets attendee data
+        from the user and saves it to the database if the user confirms
+        the data is correct.
         """
         query_list = [
             "Attendee's first name",
@@ -124,7 +124,8 @@ class GUIMenu(QWidget):
         attendee_data = self.get_attendee_data_dialog(query_list)
         user_response = self.user_confirm_attendee_data_is_correct(attendee_data)
 
-        # If the data is correct, store it into PostgreSQL database and inform about the results
+        # If the data is correct, store it into PostgreSQL database
+        # and inform about the results
         if user_response == QMessageBox.Yes:
             store_attendee_data_in_postgresql(attendee_data)
             QMessageBox.information(
@@ -134,7 +135,6 @@ class GUIMenu(QWidget):
             QMessageBox.information(
                 self, "Interrupted", "Operation interrupted!", QMessageBox.Ok
             )
-
 
     def user_choice_attendee_to_delete(self, attendee_list):
         """
@@ -169,9 +169,8 @@ class GUIMenu(QWidget):
         Presents a dialog to the user. The user can choose which user
         should be deleted.
         """
-        list_of_all_attendees = base_query(
-            get_list_all_attendees_query
-        )
+        list_of_all_attendees = get_list_all_attendees()
+
         text_version_list_of_all_attendees = \
             create_text_version_list_of_all_attendees(list_of_all_attendees)
 
@@ -179,9 +178,7 @@ class GUIMenu(QWidget):
             self.user_choice_attendee_to_delete(text_version_list_of_all_attendees)
 
         if ok_pressed and attendee_to_delete:
-            base_query(
-                remove_attendee_query, re.search(r"\d+", attendee_to_delete).group()
-            )
+            remove_attendee(re.search(r"\d+", attendee_to_delete).group())
             self.deletion_successful_show_information(attendee_to_delete)
 
     def user_choice_attendees_list_file_format(self):
@@ -216,7 +213,8 @@ class GUIMenu(QWidget):
 
     def get_attendees_list_save_file(self, format_=".docx"):
         """
-        Asks the user to specify where to save and how to name the file with the guest list.
+        Asks the user to specify where to save and
+        how to name the file with the guest list.
         """
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
@@ -292,7 +290,8 @@ class GUIMenu(QWidget):
         QMessageBox.information(
             self,
             "Try again",
-            "There are too many matching results!\n\nTry more specified search :)"
+            "There are too many matching results!"
+            "\n\nTry more specified search :)"
             * 500,
             QMessageBox.Ok,
         )

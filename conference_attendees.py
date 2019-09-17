@@ -5,10 +5,10 @@
 # - add a new attendee
 # - remove an existing attendee (based on a database)
 # - display information on an attendee
-# - list all of the attendees -> output it to a docx file
-# - buttons have tooltips
+# - list all of the attendees -> output it to a docx or xlsx file
 
 import sys
+
 from gui import GUIMenu
 from PyQt5.QtWidgets import QApplication
 
