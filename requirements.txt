@@ -2,7 +2,7 @@ appdirs==1.4.3
 attrs==19.1.0
 black==19.3b0
 Click==7.0
-lxml==4.3.4
+lxml==4.6.3
 numpy==1.17.2
 pandas==0.25.1
 Pillow==6.0.0
